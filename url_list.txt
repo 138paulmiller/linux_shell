@@ -1,0 +1,2 @@
+http://ftp.gnu.org/gnu/wget/wget-1.5.3.tar.gz
+https://www.gnu.org/s/bash/manual/bash.pdf
