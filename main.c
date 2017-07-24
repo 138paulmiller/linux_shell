@@ -5,10 +5,14 @@
 #include <sys/wait.h>
 const char* USR_BIN_PATH = "/usr/bin/";
 const char* BIN_PATH = "/bin/";
-void process_parent();
+const char* DOWNLOAD = "dl"; //download url_file 
+
+void download_serial(const char* url_file);
+void process_fork(char* cmd, char*args); //forks current process
+void process_parent(const char* cmd, const char* args);
 void process_child(const char* cmd, const char* args);
 int execute(const char*path, const char* cmd, const char* args);
-char* get_input(const char* prompt);
+char* get_input(char* prompt);
 char* str_append(const char* str_a, const char* str_b);
 main(int argc, char ** argv)
 {
@@ -20,34 +24,66 @@ main(int argc, char ** argv)
 	int quit = 1;
 	char * input;
 	do{
-		input = get_input("cmd>");
+		input = get_input("cmd>");//get input from stdin
 		//split input by space
-		char* cmd = strtok(input, " "); //get cmd,
-		char* args = strtok(0, ""); //get remaining string
 		quit = strcmp(input, "quit");
 		if(quit != 0)
 		{
-			int pid = fork(); //fork child process
-			//concurrent section, if pid is zero then current 
-			//running is child
-			if (pid == 0) 
-			{
-				process_child(cmd, args);
-			}
-			else //else if current running pid is not zero, it is 
-				//paretn process
-			{
-				process_parent();
-			}
+			char* cmd = strtok(input, " "); //get cmd,
+			char* args = strtok(0, ""); //get remaining string
+			process_fork(cmd, args);
 		}
-	}while(quit);
+	}while(quit != 0);
 	
 	printf("\nGoodbye\n");
 }
-void process_parent()
+
+void download_serial(const char* url_file)
 {
-	if(wait(0)>-1)
-		printf("Done\n");
+	FILE *file = fopen(url_file,"r");
+	if(file == 0)
+	{
+		printf("Could not open %s", url_file);
+	}
+	else
+	{
+		fseek(file, 0, SEEK_END); //move to end
+		int file_size = ftell(file); //get pos num
+		fseek(file, 0, SEEK_SET); //go to beg of file
+		char* status;
+		char* line = (char*)(malloc(sizeof(char)*file_size));
+		while(fgets(line, file_size, file))
+		{
+			//each line is an arg to wget
+			line[strlen(line)-1]='\0'; //remove newline
+			//printf("GET %s %d", line, strlen(line));
+			process_fork("wget", line);
+		}
+		fclose (file);
+	}
+}
+void process_fork(char* cmd, char*args)
+{
+
+	int pid = fork(); //fork child process
+	//concurrent section, if pid is zero then current 
+	//running is child
+	if (pid == 0) 
+	{
+		process_child(cmd, args);
+	}
+	else //else if current running pid is not zero, it is 
+		//paretn process
+	{
+		process_parent(cmd, args);
+	}
+}
+
+void process_parent(const char* cmd, const char* args)
+{
+	int status = wait(0);
+	if(status>-1)
+		printf("\n%s %s: Exited: %d\n", cmd, args, status);
 }
 
 void process_child(const char* cmd, const char* args)
@@ -57,28 +93,35 @@ void process_child(const char* cmd, const char* args)
 	if(execute(BIN_PATH, cmd, args) == -1)
 	//try to execute from user/bin
 		if(execute(USR_BIN_PATH, cmd, args) == -1)
-			printf("Command not found"); 
-
+			if(strcmp(cmd, DOWNLOAD)==0)
+				download_serial(args);
+			else
+				printf("Command not found"); 
+	exit(1);
 }
 //executes cmd at path with given argument
 int execute(const char*path, const char* cmd, const char* arg)
 {
 	char * full_path = str_append(path, cmd); 
-	return execlp(full_path, cmd, arg, (char*)0);
+	int status =  execlp(full_path, cmd, arg, (char*)0);
+	return status;
 }
 
-char *get_input(const char* prompt)
+char *get_input( char* prompt)
 {
-	printf("\n%s", prompt);
+	printf("%s", prompt);
+
 	char *line = NULL;
 	ssize_t size = 0; // let getline allocate buffer size for us
 	//read from stdin default deliminates buffer with newline
 	getline(&line, &size, stdin);
 	//remove newline at end of input
-	int i = -1;
-	//find first newline
-	while(++i < size && line[i]!='\n');
-	line[i]='\0';
+	if(line != 0 && size > 0){
+		int i = -1;
+		//find first newline
+		while(++i < size && line[i]!='\n');
+		line[i]='\0';
+	}
 	return line;
 }
 
