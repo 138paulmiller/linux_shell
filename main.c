@@ -7,10 +7,8 @@ const char* USR_BIN_PATH = "/usr/bin/";
 const char* BIN_PATH = "/bin/";
 const char* DOWNLOAD = "dl"; //download url_file 
 
-void download_serial(const char* url_file);
-void process_fork(char* cmd, char*args); //forks current process
-void process_parent(const char* cmd, const char* args);
-void process_child(const char* cmd, const char* args);
+void download_parallel(const char* url_file);
+void process(const char* cmd, const char* args);
 int execute(const char*path, const char* cmd, const char* args);
 char* get_input(char* prompt);
 char* str_append(const char* str_a, const char* str_b);
@@ -22,23 +20,28 @@ main(int argc, char ** argv)
 	// Next have each instance of wget process_child call process_child on the next arg
 	
 	int quit = 1;
-	char * input;
-	do{
-		input = get_input("cmd>");//get input from stdin
+	char * input="";
+	while(quit != 0){
+		//parent read input
+		input = get_input("\ncmd>");//get input from stdin
+			
 		//split input by space
 		quit = strcmp(input, "quit");
 		if(quit != 0)
 		{
 			char* cmd = strtok(input, " "); //get cmd,
 			char* args = strtok(0, ""); //get remaining string
-			process_fork(cmd, args);
+			if(fork()==0)
+				process(cmd, args);
+			else
+				wait(0);
 		}
-	}while(quit != 0);
+	}
 	
 	printf("\nGoodbye\n");
 }
 
-void download_serial(const char* url_file)
+void download_parallel(const char* url_file)
 {
 	FILE *file = fopen(url_file,"r");
 	if(file == 0)
@@ -50,43 +53,39 @@ void download_serial(const char* url_file)
 		fseek(file, 0, SEEK_END); //move to end
 		int file_size = ftell(file); //get pos num
 		fseek(file, 0, SEEK_SET); //go to beg of file
-		char* status;
 		char* line = (char*)(malloc(sizeof(char)*file_size));
+		int pid;
+		int child_threads=0;
 		while(fgets(line, file_size, file))
 		{
+			child_threads++;
 			//each line is an arg to wget
+			if(line[strlen(line)-1]=='\n')
 			line[strlen(line)-1]='\0'; //remove newline
 			//printf("GET %s %d", line, strlen(line));
-			process_fork("wget", line);
+			pid = fork(); //for a child
+			if(pid < 0)
+			{
+				printf("ERROR Forking process");
+				exit(-1);
+			}
+			else if (pid == 0) 
+				process("wget", line);
+			//do not wait for child, continue forking for ewach download
 		}
 		fclose (file);
-	}
-}
-void process_fork(char* cmd, char*args)
-{
-
-	int pid = fork(); //fork child process
-	//concurrent section, if pid is zero then current 
-	//running is child
-	if (pid == 0) 
-	{
-		process_child(cmd, args);
-	}
-	else //else if current running pid is not zero, it is 
-		//paretn process
-	{
-		process_parent(cmd, args);
+		//parent process to finish early wait for other
+		//wait for all child threads to finish
+		while(child_threads>0)
+		{
+			child_threads--;
+			printf("PID: %d Waiting", pid);
+			wait(0);
+		}
 	}
 }
 
-void process_parent(const char* cmd, const char* args)
-{
-	int status = wait(0);
-	if(status>-1)
-		printf("\n%s %s: Exited: %d\n", cmd, args, status);
-}
-
-void process_child(const char* cmd, const char* args)
+void process(const char* cmd, const char* args)
 {
 	//-1 indicates failure to execute
 	//try to execute from bin_path
@@ -94,7 +93,7 @@ void process_child(const char* cmd, const char* args)
 	//try to execute from user/bin
 		if(execute(USR_BIN_PATH, cmd, args) == -1)
 			if(strcmp(cmd, DOWNLOAD)==0)
-				download_serial(args);
+				download_parallel(args);
 			else
 				printf("Command not found"); 
 	exit(1);
