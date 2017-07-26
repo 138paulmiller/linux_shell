@@ -99,10 +99,39 @@ void process(const char* cmd, const char* args)
 	exit(1);
 }
 //executes cmd at path with given argument
-int execute(const char*path, const char* cmd, const char* arg)
+int execute(const char*path, const char* cmd, const char* args)
 {
 	char * full_path = str_append(path, cmd); 
-	int status =  execlp(full_path, cmd, arg, (char*)0);
+	//get arg list by tokeninzing args
+	int i = 0;
+	char* arg_list[6]; //max 5 args
+	char* args_buffer =  (char*)malloc(sizeof(char)*strlen(args));
+	strcpy(args_buffer, args);
+	arg_list[i++] = strtok(args_buffer, " "); //get cmd,
+	while(i<6 && (arg_list[i++] = strtok(0, " ")) != 0);
+		
+	int status;
+	switch(i)
+	{
+		case 0:
+		status =  execlp(full_path, cmd, arg_list[0], (char*)0);
+		break;
+		case 1:
+		status =  execlp(full_path, cmd, arg_list[0], arg_list[1], (char*)0);
+		break;
+		case 2:
+		status =  execlp(full_path, cmd, arg_list[0], arg_list[1], arg_list[2], (char*)0);
+		break;
+		case 3:
+		status =  execlp(full_path, cmd, arg_list[0], arg_list[1], arg_list[2], arg_list[3], (char*)0);
+		break;
+		case 4:
+		status =  execlp(full_path, cmd, arg_list[0], arg_list[1], arg_list[2], arg_list[3], arg_list[4],(char*)0);
+		break;
+		case 5:
+		status =  execlp(full_path, cmd, arg_list[0], arg_list[1], arg_list[2], arg_list[3], arg_list[4], arg_list[5], (char*)0);
+		break;
+	}
 	return status;
 }
 
